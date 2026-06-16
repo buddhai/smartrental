@@ -118,6 +118,29 @@ def _solve_irr_newton(
     return float('nan')
 
 
+def _has_value(value: float) -> bool:
+    return float(value or 0) > 0
+
+
+def resolve_auto_mode(cost: float, monthly_fee: float, target_irr: float) -> str:
+    """
+    비어 있는(0) 항목을 산출.
+    취득원가+월렌탈료(±목표IRR) → IRR, 취득+목표 → 월렌탈료, 월렌+목표 → 취득원가.
+    세 값 모두 입력 시 IRR 산출(실제 수익률).
+    """
+    has_cost = _has_value(cost)
+    has_fee = _has_value(monthly_fee)
+    has_target = _has_value(target_irr)
+
+    if has_cost and has_fee:
+        return 'irr'
+    if has_cost and has_target and not has_fee:
+        return 'fee'
+    if has_fee and has_target and not has_cost:
+        return 'cost'
+    return 'none'
+
+
 def compute_rental(
     *,
     mode: str = 'irr',
@@ -136,7 +159,8 @@ def compute_rental(
     target_irr: float = 0,
 ) -> dict:
     """
-    mode: 'irr' | 'fee' | 'cost'
+    mode: 'auto' | 'irr' | 'fee' | 'cost'
+    auto: 비어 있는 항목을 역산 (세 값 모두 입력 시 IRR 산출)
     irr_type: 'unlevered' | 'levered'
     timing_mode: 'm1' | 'm0'
     sga_rate_pct: HTML과 동일, % 단위 (0.1056 = 0.1056%)
@@ -154,6 +178,11 @@ def compute_rental(
     deposit = float(deposit or 0)
     residual = float(residual or 0)
     buyout = float(buyout or 0)
+
+    solve_mode = mode
+    if mode == 'auto':
+        solve_mode = resolve_auto_mode(cost, monthly_fee, target_irr)
+    mode = solve_mode
 
     total_cost = cost * qty
     total_monthly_fee = monthly_fee * qty
@@ -251,5 +280,6 @@ def compute_rental(
         'total_monthly_fee': round(total_monthly_fee),
         'monthly_sga': round(monthly_sga),
         'irr': calculated_irr,
-        'target_irr': target_irr if mode == 'irr' else target_irr,
+        'target_irr': target_irr,
+        'solve_mode': solve_mode,
     }

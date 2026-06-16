@@ -12,7 +12,7 @@ import streamlit as st
 
 from excel_builder import build_bundle_workbook
 from excel_service import SUPPORTED_TERMS, load_workbook_for_term
-from rental_calc import compute_rental
+from rental_calc import compute_rental, resolve_auto_mode
 
 st.set_page_config(
     page_title='렌탈 수익률 분석',
@@ -34,15 +34,18 @@ PRODUCT_LABELS = {
 }
 SUPPORTED_TERMS_LIST = sorted(SUPPORTED_TERMS)
 
-CALC_LABELS = {'irr': '수익률', 'fee': '월렌탈료', 'cost': '취득원가'}
+AUTO_HINT = (
+    '취득원가 · 월렌탈료 · 목표 IRR 중 <strong>비어 있는 항목(0)</strong>을 자동 산출합니다. '
+    '세 값 모두 입력 시 <strong>실제 IRR</strong>을 표시합니다.'
+)
+SOLVED_TAGS = {
+    'irr': '수익률 산출',
+    'fee': '월렌탈료 산출',
+    'cost': '취득원가 산출',
+    'none': '산출 불가 — 값을 더 입력해 주세요',
+}
 IRR_LABELS = {'unlevered': '순수수익률', 'levered': '자기자본'}
 TIMING_LABELS = {'m1': '1회차 청구', 'm0': '계약 시점'}
-MODE_HINTS = {
-    'irr': '취득원가 · 월렌탈료 입력 → <strong>수익률</strong> 산출',
-    'fee': '취득원가 · 목표 IRR(하한) 입력 → <strong>월렌탈료</strong> 산출 (천원 올림)',
-    'cost': '월렌탈료 · 목표 IRR(하한) 입력 → <strong>취득원가</strong> 산출 (만원 내림)',
-}
-SOLVED_TAGS = {'irr': '수익률 산출', 'fee': '월렌탈료 산출', 'cost': '취득원가 산출'}
 IRR_HELP = {
     'unlevered': '판관비만 비용 처리 · 제조사 엑셀과 동일한 순수 수익률',
     'levered': '조달금리 이자 + 판관비 차감 · 자기자본 수익률',
@@ -372,77 +375,60 @@ def _format_irr(irr_display: float) -> str:
     return f'{irr_display:.2f}%'
 
 
-def _render_hero(calc_mode: str, result: dict, target_irr: float) -> tuple[str, str, str]:
-    if calc_mode == 'fee':
-        irr_actual = _format_irr(result['irr'])
+def _render_hero(
+    result: dict,
+    target_irr_input: float,
+    cost_in: float,
+    fee_in: float,
+) -> tuple[str, str, str]:
+    solve = result.get('solve_mode', 'none')
+    irr_text = _format_irr(result['irr'])
+    all_three = cost_in > 0 and fee_in > 0 and target_irr_input > 0
+
+    if solve == 'fee':
         return (
             '월렌탈료 / 대',
             f'{result["monthly_fee"]:,}원',
-            f'목표 IRR {target_irr:.0f}% 이상 · 실제 {irr_actual} · 총 {result["total_monthly_fee"]:,}원',
+            f'목표 IRR {target_irr_input:.0f}% 이상 · 실제 {irr_text} · 총 {result["total_monthly_fee"]:,}원',
         )
-    if calc_mode == 'cost':
-        irr_actual = _format_irr(result['irr'])
+    if solve == 'cost':
         return (
             '취득원가 / 대',
             f'{result["cost"]:,}원',
-            f'목표 IRR {target_irr:.0f}% 이상 · 실제 {irr_actual} · 월렌탈 {result["monthly_fee"]:,}원/대',
+            f'목표 IRR {target_irr_input:.0f}% 이상 · 실제 {irr_text} · 월렌 {result["monthly_fee"]:,}원/대',
         )
-    irr_text = _format_irr(result['irr'])
-    return (
-        '연 IRR',
-        irr_text,
-        f'월렌탈 {result["monthly_fee"]:,}원/대 · 총 {result["total_monthly_fee"]:,}원',
-    )
+    if solve == 'irr':
+        sub = (
+            f'입력 목표 {target_irr_input:.2f}% → 실제 {irr_text}'
+            if all_three
+            else f'월렌 {result["monthly_fee"]:,}원/대 · 총 {result["total_monthly_fee"]:,}원'
+        )
+        return ('연 IRR', irr_text, sub)
+    return ('연 IRR', '—', '취득원가·월렌탈료·목표 IRR 중 두 가지 이상 입력해 주세요.')
 
 
-def _render_scenario_values(calc_mode: str) -> tuple[float, float, float]:
-    """모드별 입력만 노출. 산출 대상 필드는 제외."""
-    if calc_mode == 'irr':
-        c1, c2 = st.columns(2)
-        with c1:
-            _field_label('취득원가/대', required=True)
-            cost = st.number_input(
-                '취득원가/대', min_value=0, value=0, step=10000, format='%d',
-                key='in_cost', label_visibility='collapsed',
-            )
-        with c2:
-            _field_label('월렌탈료/대', required=True)
-            monthly_fee = st.number_input(
-                '월렌탈료/대', min_value=0, value=0, step=1000, format='%d',
-                key='in_fee', label_visibility='collapsed',
-            )
-        return cost, monthly_fee, 0.0
-
-    if calc_mode == 'fee':
-        c1, c2 = st.columns(2)
-        with c1:
-            _field_label('취득원가/대', required=True)
-            cost = st.number_input(
-                '취득원가/대', min_value=0, value=0, step=10000, format='%d',
-                key='in_cost', label_visibility='collapsed',
-            )
-        with c2:
-            _field_label('목표 IRR (%) · 하한', required=True)
-            target_irr = st.number_input(
-                '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f',
-                key='in_target_irr', label_visibility='collapsed',
-            )
-        return cost, 0.0, target_irr
-
-    c1, c2 = st.columns(2)
+def _render_scenario_values() -> tuple[float, float, float]:
+    """세 항목 모두 노출. 0이면 비어 있는 것으로 역산."""
+    c1, c2, c3 = st.columns(3)
     with c1:
-        _field_label('월렌탈료/대', required=True)
+        _field_label('취득원가/대', required=False)
+        cost = st.number_input(
+            '취득원가/대', min_value=0, value=0, step=10000, format='%d',
+            key='in_cost', label_visibility='collapsed',
+        )
+    with c2:
+        _field_label('월렌탈료/대', required=False)
         monthly_fee = st.number_input(
             '월렌탈료/대', min_value=0, value=0, step=1000, format='%d',
             key='in_fee', label_visibility='collapsed',
         )
-    with c2:
-        _field_label('목표 IRR (%) · 하한', required=True)
+    with c3:
+        _field_label('목표 IRR (%)', required=False)
         target_irr = st.number_input(
-            '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f',
-            key='in_target_irr_cost', label_visibility='collapsed',
+            '목표 IRR (%)', min_value=0.0, value=0.0, step=0.01, format='%.2f',
+            key='in_target_irr', label_visibility='collapsed',
         )
-    return 0.0, monthly_fee, target_irr
+    return cost, monthly_fee, target_irr
 
 
 def _validate_excel_line(line: dict) -> str | None:
@@ -518,12 +504,7 @@ def _render_login() -> bool:
 
 def _render_settings_bar() -> dict:
     st.markdown('##### 계산 설정')
-    st.markdown('<div class="setting-title">목표 계산</div>', unsafe_allow_html=True)
-    calc_mode = _segmented('목표', ['irr', 'fee', 'cost'], CALC_LABELS, 'calc_mode')
-    st.markdown(
-        f'<div class="mode-hint">{MODE_HINTS.get(calc_mode, MODE_HINTS["irr"])}</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="mode-hint">{AUTO_HINT}</div>', unsafe_allow_html=True)
 
     c2, c3 = st.columns(2)
     with c2:
@@ -564,7 +545,6 @@ def _render_settings_bar() -> dict:
     return {
         'irr_type': irr_type,
         'timing_mode': timing_mode,
-        'calc_mode': calc_mode,
         'borrow_rate': borrow_rate,
         'sga_rate_pct': sga_rate_pct,
         'residual': residual,
@@ -598,7 +578,7 @@ def main():
     with col_l:
         with st.container(border=True):
             st.markdown('##### 시나리오')
-            st.markdown('<div class="section-note">필수 항목을 입력해야 계산·엑셀 다운로드가 가능합니다.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-note">상품·수량·기간은 필수입니다. 금액·수익률은 비우면 자동 산출됩니다.</div>', unsafe_allow_html=True)
 
             _field_label('상품', required=True)
             product_key = st.selectbox(
@@ -625,12 +605,12 @@ def main():
                     label_visibility='collapsed',
                 )
 
-            calc_mode = globals_['calc_mode']
+            cost, monthly_fee, target_irr = _render_scenario_values()
+            solve_preview = resolve_auto_mode(cost, monthly_fee, target_irr)
             st.markdown(
-                f'<span class="solved-tag">{SOLVED_TAGS.get(calc_mode, SOLVED_TAGS["irr"])}</span>',
+                f'<span class="solved-tag">{SOLVED_TAGS.get(solve_preview, SOLVED_TAGS["none"])}</span>',
                 unsafe_allow_html=True,
             )
-            cost, monthly_fee, target_irr = _render_scenario_values(calc_mode)
 
             with st.expander('선수금 · 보증금 · 인수금 (선택)', expanded=False):
                 st.caption('없으면 0원으로 계산됩니다.')
@@ -655,7 +635,7 @@ def main():
     }
 
     result = compute_rental(
-        mode=globals_['calc_mode'],
+        mode='auto',
         irr_type=globals_['irr_type'],
         timing_mode=globals_['timing_mode'],
         cost=cost,
@@ -672,8 +652,8 @@ def main():
     )
 
     irr_text = _format_irr(result['irr'])
-    calc_mode = globals_['calc_mode']
-    hero_label, hero_value, sub_line = _render_hero(calc_mode, result, target_irr)
+    solve_mode = result.get('solve_mode', 'none')
+    hero_label, hero_value, sub_line = _render_hero(result, target_irr, cost, monthly_fee)
 
     with col_r:
         with st.container(border=True):
@@ -689,23 +669,30 @@ def main():
             )
 
             m1, m2 = st.columns(2)
-            if calc_mode == 'irr':
-                m1.metric('총 월렌탈료', f'{result["total_monthly_fee"]:,}원')
-                m2.metric('월 판관비', f'{result["monthly_sga"]:,}원')
-            elif calc_mode == 'fee':
+            if solve_mode == 'fee':
                 m1.metric('연 IRR', irr_text)
                 m2.metric('월 판관비', f'{result["monthly_sga"]:,}원')
-            else:
+            elif solve_mode == 'cost':
                 m1.metric('연 IRR', irr_text)
                 m2.metric('총 월렌탈료', f'{result["total_monthly_fee"]:,}원')
+            elif solve_mode == 'irr':
+                m1.metric('총 월렌탈료', f'{result["total_monthly_fee"]:,}원')
+                m2.metric('월 판관비', f'{result["monthly_sga"]:,}원')
+            else:
+                m1.metric('총 월렌탈료', '—')
+                m2.metric('월 판관비', '—')
 
-            add_disabled = product_name is None
+            add_disabled = (
+                product_name is None
+                or result['cost'] <= 0
+                or result['total_monthly_fee'] <= 0
+            )
             if st.button('시나리오 추가', type='primary', disabled=add_disabled, use_container_width=True):
                 row = _build_current_inputs(product_name, globals_, scenario_inputs, result)
                 st.session_state.scenarios.append(row)
                 st.rerun()
             if add_disabled:
-                st.caption('상품을 선택하면 추가할 수 있습니다.')
+                st.caption('상품 선택 및 취득원가·월렌탈료 산출 후 추가할 수 있습니다.')
 
     st.markdown('<div style="height:0.75rem"></div>', unsafe_allow_html=True)
 
