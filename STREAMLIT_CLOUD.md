@@ -13,12 +13,11 @@ PowerShell에서 프로젝트 폴더로 이동 후:
 ```powershell
 cd "C:\Users\User\Documents\수익률자동화"
 
-# GitHub CLI 로그인 (브라우저 열림)
-gh auth login
-# → GitHub.com → HTTPS → Login with browser
+# gh 인식 안 될 때 (PowerShell 새로 열기 전 임시 해결)
+$env:Path += ";C:\Program Files\GitHub CLI"
 
-# 저장소 생성 + 푸시 (이름은 원하는 대로 변경)
-gh repo create smartquote-rental --private --source=. --remote=origin --push
+& "C:\Program Files\GitHub CLI\gh.exe" auth login
+powershell -ExecutionPolicy Bypass -File deploy_github.ps1
 ```
 
 이미 GitHub에 빈 저장소를 만들었다면:

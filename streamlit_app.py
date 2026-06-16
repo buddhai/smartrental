@@ -16,7 +16,7 @@ from excel_service import SUPPORTED_TERMS, load_workbook_for_term
 from rental_calc import compute_rental
 
 st.set_page_config(
-    page_title='SmartQuote · 수익률 분석',
+    page_title='렌탈 수익률 분석',
     page_icon='📊',
     layout='wide',
 )
@@ -79,6 +79,38 @@ def _scenario_to_excel_line(scenario_row: dict) -> dict:
     }
 
 
+def _get_app_password() -> str:
+    try:
+        return st.secrets.get('APP_PASSWORD', '') or ''
+    except Exception:
+        return ''
+
+
+def _render_login() -> bool:
+    """공통 비밀번호 인증. 성공 시 True."""
+    if st.session_state.get('authenticated'):
+        return True
+
+    st.title('렌탈 수익률 분석')
+    st.caption('담당자 전용 · 비밀번호를 입력하세요.')
+
+    with st.form('login_form'):
+        password = st.text_input('접속 비밀번호', type='password')
+        submitted = st.form_submit_button('로그인', type='primary', use_container_width=True)
+
+    if submitted:
+        expected = _get_app_password()
+        if not expected:
+            st.error('서버에 APP_PASSWORD가 설정되지 않았습니다. (Cloud → Settings → Secrets)')
+        elif password == expected:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error('비밀번호가 올바르지 않습니다.')
+
+    return False
+
+
 def _render_sidebar() -> dict:
     st.sidebar.header('공통 설정')
     irr_type = st.sidebar.radio(
@@ -107,6 +139,11 @@ def _render_sidebar() -> dict:
     manager = st.sidebar.text_input('담당자 (메모)', value='')
 
     st.sidebar.divider()
+    if st.sidebar.button('로그아웃'):
+        st.session_state.authenticated = False
+        st.session_state.scenarios = []
+        st.rerun()
+
     st.sidebar.caption('기존 HTML 버전: `python server.py` → localhost:5000')
 
     return {
@@ -121,10 +158,13 @@ def _render_sidebar() -> dict:
 
 
 def main():
+    if not _render_login():
+        return
+
     _init_state()
     globals_ = _render_sidebar()
 
-    st.title('렌탈 수익률 분석 (Streamlit)')
+    st.title('렌탈 수익률 분석')
     st.caption('공급사 협의용 · 시나리오별 수익률분석표 엑셀 묶음 다운로드')
 
     col_l, col_r = st.columns([1, 1])
