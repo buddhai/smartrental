@@ -11,6 +11,13 @@ streamlit run streamlit_app.py
 
 **Streamlit Cloud:** [share.streamlit.io](https://share.streamlit.io) → GitHub 연결 → Main file: `streamlit_app.py`
 
+상세 절차: [STREAMLIT_CLOUD.md](STREAMLIT_CLOUD.md)
+
+```powershell
+gh auth login
+powershell -ExecutionPolicy Bypass -File deploy_github.ps1
+```
+
 ## 로컬 HTML + Flask (기존)
 
 ```bash
