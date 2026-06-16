@@ -43,6 +43,27 @@ MODE_HINTS = {
     'cost': '월렌탈료 · 목표 IRR 입력 → <strong>취득원가</strong> 산출',
 }
 SOLVED_TAGS = {'irr': '수익률 산출', 'fee': '월렌탈료 산출', 'cost': '취득원가 산출'}
+IRR_HELP = {
+    'unlevered': '판관비만 비용 처리 · 제조사 엑셀과 동일한 순수 수익률',
+    'levered': '조달금리 이자 + 판관비 차감 · 자기자본 수익률',
+}
+TIMING_HELP = {
+    'm1': '선수금·보증금을 1회차 렌탈료 청구 시 반영 (엑셀 동일)',
+    'm0': '선수금·보증금을 계약 체결 시점(t=0)에 반영',
+}
+
+
+def _badge(required: bool) -> str:
+    if required:
+        return '<span class="badge-req">필수</span>'
+    return '<span class="badge-opt">선택</span>'
+
+
+def _field_label(name: str, required: bool = True) -> None:
+    st.markdown(
+        f'<div class="field-label">{name} {_badge(required)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _inject_styles():
@@ -230,6 +251,46 @@ def _inject_styles():
             margin-bottom: 0.5rem;
         }
 
+        .setting-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.35rem;
+        }
+
+        .setting-help {
+            font-size: 0.72rem;
+            color: var(--text-sub);
+            line-height: 1.45;
+            margin: 0.35rem 0 0;
+            min-height: 2.2rem;
+        }
+
+        .field-label {
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-sub);
+            margin-bottom: 0.25rem;
+        }
+
+        .badge-req, .badge-opt {
+            display: inline-block;
+            font-size: 0.62rem;
+            font-weight: 600;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            vertical-align: middle;
+            margin-left: 0.15rem;
+        }
+        .badge-req { color: #E42939; background: #FFEBEE; }
+        .badge-opt { color: #6B7684; background: #F2F4F6; }
+
+        .section-note {
+            font-size: 0.72rem;
+            color: var(--text-sub);
+            margin: -0.25rem 0 0.6rem;
+        }
+
         .login-wrap {
             max-width: 360px;
             margin: 4rem auto 0;
@@ -337,27 +398,47 @@ def _render_scenario_values(calc_mode: str) -> tuple[float, float, float]:
     if calc_mode == 'irr':
         c1, c2 = st.columns(2)
         with c1:
-            cost = st.number_input('취득원가/대', min_value=0, value=0, step=10000, format='%d', key='in_cost')
+            _field_label('취득원가/대', required=True)
+            cost = st.number_input(
+                '취득원가/대', min_value=0, value=0, step=10000, format='%d',
+                key='in_cost', label_visibility='collapsed',
+            )
         with c2:
-            monthly_fee = st.number_input('월렌탈료/대', min_value=0, value=0, step=1000, format='%d', key='in_fee')
+            _field_label('월렌탈료/대', required=True)
+            monthly_fee = st.number_input(
+                '월렌탈료/대', min_value=0, value=0, step=1000, format='%d',
+                key='in_fee', label_visibility='collapsed',
+            )
         return cost, monthly_fee, 0.0
 
     if calc_mode == 'fee':
         c1, c2 = st.columns(2)
         with c1:
-            cost = st.number_input('취득원가/대', min_value=0, value=0, step=10000, format='%d', key='in_cost')
+            _field_label('취득원가/대', required=True)
+            cost = st.number_input(
+                '취득원가/대', min_value=0, value=0, step=10000, format='%d',
+                key='in_cost', label_visibility='collapsed',
+            )
         with c2:
+            _field_label('목표 IRR (%)', required=True)
             target_irr = st.number_input(
-                '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f', key='in_target_irr',
+                '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f',
+                key='in_target_irr', label_visibility='collapsed',
             )
         return cost, 0.0, target_irr
 
     c1, c2 = st.columns(2)
     with c1:
-        monthly_fee = st.number_input('월렌탈료/대', min_value=0, value=0, step=1000, format='%d', key='in_fee')
+        _field_label('월렌탈료/대', required=True)
+        monthly_fee = st.number_input(
+            '월렌탈료/대', min_value=0, value=0, step=1000, format='%d',
+            key='in_fee', label_visibility='collapsed',
+        )
     with c2:
+        _field_label('목표 IRR (%)', required=True)
         target_irr = st.number_input(
-            '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f', key='in_target_irr',
+            '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f',
+            key='in_target_irr', label_visibility='collapsed',
         )
     return 0.0, monthly_fee, target_irr
 
@@ -407,34 +488,48 @@ def _render_login() -> bool:
 
 def _render_settings_bar() -> dict:
     st.markdown('##### 계산 설정')
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        calc_mode = _segmented('목표', ['irr', 'fee', 'cost'], CALC_LABELS, 'calc_mode')
-    with c2:
-        irr_type = _segmented('수익률', ['unlevered', 'levered'], IRR_LABELS, 'irr_type')
-    with c3:
-        timing_mode = _segmented('시점', ['m1', 'm0'], TIMING_LABELS, 'timing_mode')
-
+    st.markdown('<div class="setting-title">목표 계산</div>', unsafe_allow_html=True)
+    calc_mode = _segmented('목표', ['irr', 'fee', 'cost'], CALC_LABELS, 'calc_mode')
     st.markdown(
         f'<div class="mode-hint">{MODE_HINTS[calc_mode]}</div>',
         unsafe_allow_html=True,
     )
 
-    with st.expander('금리 · 판관비 · 잔존가치', expanded=False):
+    c2, c3 = st.columns(2)
+    with c2:
+        st.markdown('<div class="setting-title">수익률 산출 방식</div>', unsafe_allow_html=True)
+        irr_type = _segmented('수익률', ['unlevered', 'levered'], IRR_LABELS, 'irr_type')
+        st.markdown(f'<div class="setting-help">{IRR_HELP[irr_type]}</div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown('<div class="setting-title">초기대금 수취 시점</div>', unsafe_allow_html=True)
+        timing_mode = _segmented('시점', ['m1', 'm0'], TIMING_LABELS, 'timing_mode')
+        st.markdown(f'<div class="setting-help">{TIMING_HELP[timing_mode]}</div>', unsafe_allow_html=True)
+
+    with st.expander('금리 · 판관비 · 잔존가치 (선택)', expanded=False):
+        st.caption('기본값이 적용됩니다. 자기자본 수익률 선택 시 조달금리가 이자비용에 반영됩니다.')
         g1, g2, g3, g4 = st.columns(4)
         with g1:
-            borrow_rate = st.number_input('조달금리 (연%)', value=6.0, step=0.1, format='%.1f')
+            _field_label('조달금리 (연%)', required=False)
+            borrow_rate = st.number_input(
+                '조달금리', value=6.0, step=0.1, format='%.1f', label_visibility='collapsed',
+            )
         with g2:
+            _field_label('판관비율 (월%)', required=False)
             sga_rate_pct = st.number_input(
-                '판관비율 (월%)',
+                '판관비율',
                 value=0.105555555555,
                 step=0.0001,
                 format='%.6f',
+                label_visibility='collapsed',
             )
         with g3:
-            residual = st.number_input('잔존가치 (원)', value=0, step=10000, format='%d')
+            _field_label('잔존가치 (원)', required=False)
+            residual = st.number_input(
+                '잔존가치', value=0, step=10000, format='%d', label_visibility='collapsed',
+            )
         with g4:
-            manager = st.text_input('담당자', value='', placeholder='메모')
+            _field_label('담당자', required=False)
+            manager = st.text_input('담당자', value='', placeholder='메모', label_visibility='collapsed')
 
     return {
         'irr_type': irr_type,
@@ -473,6 +568,9 @@ def main():
     with col_l:
         with st.container(border=True):
             st.markdown('##### 시나리오')
+            st.markdown('<div class="section-note">필수 항목을 입력해야 계산·엑셀 다운로드가 가능합니다.</div>', unsafe_allow_html=True)
+
+            _field_label('상품', required=True)
             product_key = st.selectbox(
                 '상품',
                 PRODUCT_OPTIONS,
@@ -481,16 +579,20 @@ def main():
             )
             custom_name = ''
             if product_key == '__custom__':
-                custom_name = st.text_input('상품명', placeholder='직접 입력')
+                _field_label('상품명', required=True)
+                custom_name = st.text_input('상품명', placeholder='직접 입력', label_visibility='collapsed')
 
             r1, r2 = st.columns(2)
             with r1:
-                qty = st.number_input('수량 (대)', min_value=1, value=1, step=1)
+                _field_label('수량 (대)', required=True)
+                qty = st.number_input('수량', min_value=1, value=1, step=1, label_visibility='collapsed')
             with r2:
+                _field_label('기간 (개월)', required=True)
                 term = st.selectbox(
-                    '기간 (개월)',
+                    '기간',
                     SUPPORTED_TERMS_LIST,
                     index=SUPPORTED_TERMS_LIST.index(36),
+                    label_visibility='collapsed',
                 )
 
             calc_mode = globals_['calc_mode']
@@ -500,14 +602,18 @@ def main():
             )
             cost, monthly_fee, target_irr = _render_scenario_values(calc_mode)
 
-            with st.expander('선수금 · 보증금 · 인수금', expanded=False):
+            with st.expander('선수금 · 보증금 · 인수금 (선택)', expanded=False):
+                st.caption('없으면 0원으로 계산됩니다.')
                 f1, f2, f3 = st.columns(3)
                 with f1:
-                    advance = st.number_input('선수금', min_value=0, value=0, step=10000, format='%d')
+                    _field_label('선수금', required=False)
+                    advance = st.number_input('선수금', min_value=0, value=0, step=10000, format='%d', label_visibility='collapsed')
                 with f2:
-                    deposit = st.number_input('보증금', min_value=0, value=0, step=10000, format='%d')
+                    _field_label('보증금', required=False)
+                    deposit = st.number_input('보증금', min_value=0, value=0, step=10000, format='%d', label_visibility='collapsed')
                 with f3:
-                    buyout = st.number_input('인수금', min_value=0, value=0, step=10000, format='%d')
+                    _field_label('인수금', required=False)
+                    buyout = st.number_input('인수금', min_value=0, value=0, step=10000, format='%d', label_visibility='collapsed')
 
     product_name = _resolve_product(product_key, custom_name)
     scenario_inputs = {
