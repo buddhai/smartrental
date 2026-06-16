@@ -39,7 +39,7 @@ IRR_LABELS = {'unlevered': '순수수익률', 'levered': '자기자본'}
 TIMING_LABELS = {'m1': '1회차 청구', 'm0': '계약 시점'}
 MODE_HINTS = {
     'irr': '취득원가 · 월렌탈료 입력 → <strong>수익률</strong> 산출',
-    'fee': '취득원가 · 목표 IRR 입력 → <strong>월렌탈료</strong> 산출',
+    'fee': '취득원가 · 목표 IRR(하한) 입력 → <strong>월렌탈료</strong> 산출 (천원 올림)',
     'cost': '월렌탈료 · 목표 IRR 입력 → <strong>취득원가</strong> 산출',
 }
 SOLVED_TAGS = {'irr': '수익률 산출', 'fee': '월렌탈료 산출', 'cost': '취득원가 산출'}
@@ -374,10 +374,11 @@ def _format_irr(irr_display: float) -> str:
 
 def _render_hero(calc_mode: str, result: dict, target_irr: float) -> tuple[str, str, str]:
     if calc_mode == 'fee':
+        irr_actual = _format_irr(result['irr'])
         return (
             '월렌탈료 / 대',
             f'{result["monthly_fee"]:,}원',
-            f'목표 IRR {target_irr:.2f}% · 총 월렌탈 {result["total_monthly_fee"]:,}원',
+            f'목표 IRR {target_irr:.0f}% 이상 · 실제 {irr_actual} · 총 {result["total_monthly_fee"]:,}원',
         )
     if calc_mode == 'cost':
         return (
@@ -420,7 +421,7 @@ def _render_scenario_values(calc_mode: str) -> tuple[float, float, float]:
                 key='in_cost', label_visibility='collapsed',
             )
         with c2:
-            _field_label('목표 IRR (%)', required=True)
+            _field_label('목표 IRR (%) · 하한', required=True)
             target_irr = st.number_input(
                 '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f',
                 key='in_target_irr', label_visibility='collapsed',
