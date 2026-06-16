@@ -1,0 +1,7 @@
+# Streamlit Cloud + 로컬 공용
+streamlit>=1.28.0
+openpyxl>=3.1.0
+
+# Flask 로컬 서버 (Streamlit Cloud에서는 미사용)
+flask>=3.0.0
+flask-cors>=4.0.0

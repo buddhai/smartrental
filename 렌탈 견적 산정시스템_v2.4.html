@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartQuote v2.4 - 렌탈 수익률 및 견적 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --bg-color: #f5f6fa;
+            --border-color: #dcdde1;
+            --highlight-color: #e8f4f8;
+        }
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .panel {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            flex: 1;
+            min-width: 450px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .form-group label {
+            width: 150px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .form-group input, .form-group select {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group input:read-only {
+            background-color: #ebf5fb;
+            color: #c0392b;
+            font-weight: bold;
+            border-color: var(--accent-color);
+            cursor: not-allowed;
+        }
+        .input-readonly-gray {
+            background-color: #f8f9fa !important;
+            color: #7f8c8d !important;
+            border-color: #dcdde1 !important;
+            cursor: default !important;
+        }
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+        }
+        .radio-group label {
+            width: auto;
+            font-weight: normal;
+            font-size: 13px;
+        }
+        .divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 20px 0;
+        }
+        .result-box {
+            background: var(--highlight-color);
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .result-box span {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        .quote-preview {
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            min-height: 400px;
+        }
+        .quote-header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+        .quote-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .quote-table th, .quote-table td {
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            text-align: right;
+            font-size: 14px;
+        }
+        .quote-table th {
+            background-color: #f8f9fa;
+            text-align: center;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            flex: 1;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .calc-mode-box {
+            background-color: #fff3cd;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #ffeeba;
+        }
+        .settings-box {
+            background-color: #f1f8ff;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #c8e1ff;
+        }
+        .scenario-box {
+            background-color: #f0fdf4;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #bbf7d0;
+        }
+        .scenario-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .scenario-table th, .scenario-table td {
+            border: 1px solid var(--border-color);
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .scenario-table th {
+            background: #f8f9fa;
+        }
+        .scenario-table td:nth-child(2) {
+            text-align: left;
+        }
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 12px;
+            flex: none;
+            background: #95a5a6;
+        }
+        .btn-add {
+            background: #27ae60;
+            flex: none;
+            padding: 8px 14px;
+        }
+        .quote-details summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: var(--secondary-color);
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel">
+        <div style="font-size:18px; font-weight:bold; margin-bottom:20px;">#렌탈_조건_입력 (v2.4 - 자동 판관비 연동)</div>
+        
+        <div class="form-group">
+            <label>상품 선택</label>
+            <div style="flex:1; display:flex; gap:10px;">
+                <select id="productName" onchange="toggleCustomProduct()" style="flex:1;">
+                    <option value="" selected>선택안함</option>
+                    <option value="4족보행로봇">4족보행로봇</option>
+                    <option value="서빙로봇 (기본형)">서빙로봇 (기본형)</option>
+                    <option value="물류로봇 (AMR)">물류로봇 (AMR)</option>
+                    <option value="직접입력">직접입력</option>
+                </select>
+                <input type="text" id="customProductName" style="display:none; flex:1;" placeholder="상품명 직접 입력" oninput="calculate()">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>수량 (대)</label>
+            <input type="number" id="qty" value="1" min="1" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label>렌탈 기간 (개월)</label>
+            <input type="number" id="term" value="36" min="12" step="12" oninput="calculate()">
+        </div>
+        <div style="font-size:11px; color:#7f8c8d; margin:-10px 0 15px 150px;">
+            엑셀 연동 지원: 12 / 24 / 36 / 48 / 60개월
+        </div>
+        
+        <div class="divider"></div>
+        <div class="settings-box">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label style="color:#0366d6;">수익률 산출 방식</label>
+                <div class="radio-group" style="font-weight:bold;">
+                    <label title="제조사 엑셀 매칭용"><input type="radio" name="irrType" value="unlevered" checked onchange="calculate()"> 순수 수익률 (엑셀 동일)</label>
+                    <label title="조달금리 이자 차감"><input type="radio" name="irrType" value="levered" onchange="calculate()"> 자기자본 수익률 (기존)</label>
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label style="color:#0366d6;">초기대금 수취 시점</label>
+                <div class="radio-group" style="font-weight:bold;">
+                    <label><input type="radio" name="timingMode" value="m1" checked onchange="calculate()"> 1회차 청구 시 (엑셀 동일)</label>
+                    <label><input type="radio" name="timingMode" value="m0" onchange="calculate()"> 계약 시점 (표준)</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="calc-mode-box form-group" style="margin-bottom:20px;">
+            <label style="color:#856404;">목표 계산 항목</label>
+            <div class="radio-group" style="color:#856404; font-weight:bold;">
+                <label><input type="radio" name="calcMode" value="irr" checked onchange="updateMode()"> 수익률(IRR)</label>
+                <label><input type="radio" name="calcMode" value="fee" onchange="updateMode()"> 월 렌탈료</label>
+                <label><input type="radio" name="calcMode" value="cost" onchange="updateMode()"> 취득원가</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>대당 취득원가 (원)</label>
+            <input type="number" id="cost" value="0" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label>대당 월 렌탈료 (원)</label>
+            <input type="number" id="monthlyFee" value="0" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label style="color:#2980b9;">총 월 렌탈료 (원)</label>
+            <input type="number" id="totalMonthlyFee" class="input-readonly-gray" value="0" readonly>
+        </div>
+        <div class="form-group">
+            <label>목표 수익률 (%)</label>
+            <input type="number" id="targetIrr" value="0" oninput="calculate()">
+        </div>
+        
+        <div class="divider"></div>
+        <div style="font-size:14px; font-weight:bold; margin-bottom:15px; color:#c0392b;">#비용 산출 설정 (판관비 / 조달금리)</div>
+
+        <div class="form-group">
+            <label style="color:#c0392b;">월별 판관비율 (%)</label>
+            <input type="number" step="0.0001" id="sgaRate" value="0.105555555555" oninput="calculate()" title="기본값: 0.1056%">
+        </div>
+        <div class="form-group">
+            <label style="color:#c0392b;">월 판관비 (원)</label>
+            <input type="number" id="monthlySga" class="input-readonly-gray" value="0" readonly title="총취득가 × 월별 판관비율">
+        </div>
+        <div class="form-group">
+            <label>조달 금리 (연 %)</label>
+            <input type="number" id="borrowRate" value="6.0" oninput="calculate()" title="자기자본 수익률 선택 시 이자비용으로 차감됨">
+        </div>
+
+        <div class="divider"></div>
+        <div style="font-size:14px; font-weight:bold; margin-bottom:15px; color:#e67e22;">#초기/만기 현금흐름 (입력 금액 그대로 적용)</div>
+        
+        <div class="form-group">
+            <label>선수금 (원)</label>
+            <input type="number" id="advance" value="0" placeholder="반환되지 않는 선납금" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label>보증금 (원)</label>
+            <input type="number" id="deposit" value="0" placeholder="수취 후 만기 반납" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label>잔존가치 (원)</label>
+            <input type="number" id="residual" value="0" placeholder="만기 시점 가치" oninput="calculate()">
+        </div>
+        <div class="form-group">
+            <label>인수금 (원)</label>
+            <input type="number" id="buyout" value="0" placeholder="만기 이후 수취" oninput="calculate()">
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div class="form-group">
+            <label>추가 옵션</label>
+            <div class="radio-group">
+                <label><input type="checkbox" id="optAS" onchange="calculate()"> A/S 포함</label>
+                <label><input type="checkbox" id="optInstall" onchange="calculate()"> 설치비 포함</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>부가세 여부</label>
+            <div class="radio-group">
+                <label><input type="radio" name="vat" value="exclude" checked onchange="calculate()"> 별도</label>
+                <label><input type="radio" name="vat" value="include" onchange="calculate()"> 포함</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>담당자 정보</label>
+            <input type="text" id="managerInfo" placeholder="영업담당자 이름 / 연락처" oninput="calculate()">
+        </div>
+
+        <div class="divider"></div>
+        <div class="scenario-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:14px; font-weight:bold; color:#166534;">시나리오 목록 (엑셀 시트별 생성)</div>
+                <button type="button" class="btn-add" onclick="addScenario()">＋ 목록에 추가</button>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:8px;">
+                위 조건 입력 후 「목록에 추가」로 시나리오를 쌓은 뒤, 한 번에 엑셀 다운로드합니다. (공급사 협의용)
+            </div>
+            <table class="scenario-table" id="scenarioTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>상품</th>
+                        <th>기간</th>
+                        <th>수량</th>
+                        <th>월렌탈료</th>
+                        <th>IRR(%)</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="scenarioBody">
+                    <tr id="scenarioEmpty"><td colspan="7" style="color:#94a3b8;">추가된 시나리오가 없습니다. 현재 조건만으로도 다운로드 가능합니다.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="result-box">
+            현재 조건 IRR: <span id="irrResult">0.00</span> %
+        </div>
+
+        <div class="btn-group">
+            <button onclick="downloadFilledExcel()" style="background-color:#27ae60; flex:2;" title="시나리오 목록(또는 현재 조건)으로 수익률분석표 엑셀 생성">📊 수익률분석표 다운로드</button>
+        </div>
+
+        <details class="quote-details" style="margin-top:20px;">
+            <summary>견적서 미리보기 (필요 시)</summary>
+        <div class="quote-preview" id="quoteDoc">
+            <div class="quote-header">
+                <div style="font-size:24px; font-weight:bold;">렌탈 견적서</div>
+                <div style="text-align:right; font-size:12px; margin-top:10px;" id="quoteDate"></div>
+            </div>
+            
+            <div style="display:flex; margin-bottom:15px; gap:15px;">
+                <div style="flex:1;">
+                    <table class="quote-table" style="margin-bottom:0;">
+                        <tr><th>수신</th><td>귀하</td></tr>
+                        <tr><th>담당자</th><td id="qManager"></td></tr>
+                        <tr><th>상품명</th><td id="qProduct"></td></tr>
+                        <tr><th>수량</th><td id="qQty"></td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <table class="quote-table" id="excelTable">
+                <tr>
+                    <th>항목</th>
+                    <th>상세 조건</th>
+                    <th>금액</th>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">렌탈 기간</td>
+                    <td style="text-align:center;" id="qTerm"></td>
+                    <td style="background-color:#f9f9f9;">-</td>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">선수금</td>
+                    <td style="text-align:center;" id="qTimingText"></td>
+                    <td id="qAdvance"></td>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">보증금</td>
+                    <td style="text-align:center;">계약/1회차 납부 및 만기+1 반납</td>
+                    <td id="qDeposit"></td>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">총 월 렌탈료</td>
+                    <td style="text-align:center;" id="qVatText">부가세 별도</td>
+                    <td style="font-weight:bold; color:#e74c3c;" id="qMonthlyFee"></td>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">잔존가치</td>
+                    <td style="text-align:center;">만기(장부상) 가치</td>
+                    <td id="qResidual"></td>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">인수금</td>
+                    <td style="text-align:center;">만기+1개월차 수득액</td>
+                    <td id="qBuyout"></td>
+                </tr>
+                <tr>
+                    <td style="text-align:center;">포함사항</td>
+                    <td colspan="2" style="text-align:center; font-size:12px;" id="qOptions"></td>
+                </tr>
+            </table>
+            <div style="font-size:11px; color:#7f8c8d; text-align:center; margin-top:20px;">
+                본 견적서는 시장 상황에 따라 변동될 수 있으며, 계약 체결 전까지 법적 구속력을 가지지 않습니다.
+            </div>
+        </div>
+        <div class="btn-group" style="margin-top:8px;">
+            <button onclick="downloadExcel()">견적서 엑셀</button>
+            <button onclick="downloadPDF()">PDF 출력</button>
+        </div>
+        </details>
+    </div>
+</div>
+
+<script>
+    document.getElementById('quoteDate').innerText = "견적일: " + new Date().toLocaleDateString();
+
+    const supportedTerms = [12, 24, 36, 48, 60];
+    let scenarios = [];
+
+    function formatNumber(num) {
+        return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function getProductDisplayName() {
+        const pSel = document.getElementById('productName').value;
+        if (!pSel) return '선택안함';
+        if (pSel === '직접입력') {
+            return document.getElementById('customProductName').value || '상품명 미입력';
+        }
+        return pSel;
+    }
+
+    function collectGlobals() {
+        return {
+            borrowRate: document.getElementById('borrowRate').value,
+            sgaRate: document.getElementById('sgaRate').value,
+            irrType: document.querySelector('input[name="irrType"]:checked').value,
+            residual: document.getElementById('residual').value,
+        };
+    }
+
+    function collectCurrentScenario() {
+        const pSel = document.getElementById('productName').value;
+        if (!pSel) return null;
+        const pName = getProductDisplayName();
+        if (pSel === '직접입력' && !document.getElementById('customProductName').value.trim()) return null;
+
+        const term = Number(document.getElementById('term').value) || 36;
+        if (!supportedTerms.includes(term)) return null;
+
+        return {
+            productName: pName,
+            cost: Number(document.getElementById('cost').value) || 0,
+            qty: Number(document.getElementById('qty').value) || 1,
+            term: term,
+            totalMonthlyFee: Number(document.getElementById('totalMonthlyFee').value) || 0,
+            advance: Number(document.getElementById('advance').value) || 0,
+            sgaRate: document.getElementById('sgaRate').value,
+            irrLabel: document.getElementById('irrResult').innerText.trim(),
+        };
+    }
+
+    function scenarioToPayload(s) {
+        return {
+            productName: s.productName,
+            cost: s.cost,
+            qty: s.qty,
+            term: s.term,
+            totalMonthlyFee: s.totalMonthlyFee,
+            advance: s.advance,
+            sgaRate: s.sgaRate,
+        };
+    }
+
+    function renderScenarioList() {
+        const tbody = document.getElementById('scenarioBody');
+        if (scenarios.length === 0) {
+            tbody.innerHTML = '<tr id="scenarioEmpty"><td colspan="7" style="color:#94a3b8;">추가된 시나리오가 없습니다. 현재 조건만으로도 다운로드 가능합니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = scenarios.map((s, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${s.productName}</td>
+                <td>${s.term}개월</td>
+                <td>${s.qty}대</td>
+                <td>${formatNumber(s.totalMonthlyFee)}</td>
+                <td>${s.irrLabel}</td>
+                <td><button type="button" class="btn-small" onclick="removeScenario(${i})">삭제</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function addScenario() {
+        calculate();
+        const s = collectCurrentScenario();
+        if (!s) {
+            alert('상품·기간(12/24/36/48/60)을 확인하고 조건을 입력해주세요.');
+            return;
+        }
+        scenarios.push(s);
+        renderScenarioList();
+    }
+
+    function removeScenario(index) {
+        scenarios.splice(index, 1);
+        renderScenarioList();
+    }
+
+    function getDownloadLines() {
+        calculate();
+        if (scenarios.length > 0) {
+            return scenarios.map(scenarioToPayload);
+        }
+        const cur = collectCurrentScenario();
+        return cur ? [scenarioToPayload(cur)] : null;
+    }
+
+    function toggleCustomProduct() {
+        const select = document.getElementById('productName');
+        const customInput = document.getElementById('customProductName');
+        if (select.value === '직접입력') {
+            customInput.style.display = 'block';
+            customInput.focus();
+        } else {
+            customInput.style.display = 'none';
+            customInput.value = '';
+        }
+        calculate();
+    }
+
+    function updateMode() {
+        const mode = document.querySelector('input[name="calcMode"]:checked').value;
+        
+        document.getElementById('targetIrr').readOnly = (mode === 'irr');
+        document.getElementById('monthlyFee').readOnly = (mode === 'fee');
+        document.getElementById('cost').readOnly = (mode === 'cost');
+
+        calculate();
+    }
+
+    function calculate() {
+        const mode = document.querySelector('input[name="calcMode"]:checked').value;
+        const irrType = document.querySelector('input[name="irrType"]:checked').value;
+        const timingMode = document.querySelector('input[name="timingMode"]:checked').value;
+
+        let cost = Number(document.getElementById('cost').value) || 0;
+        const qty = Number(document.getElementById('qty').value) || 1;
+        const term = Number(document.getElementById('term').value) || 1;
+        const borrowRate = Number(document.getElementById('borrowRate').value) || 0;
+        const bRateMonthly = borrowRate / 100 / 12;
+        
+        // 엑셀 수식: 총취득가 × (0.1056% × 렌탈기간) / 렌탈기간 ＝ 총취득가 × 0.1056%
+        const sgaRate = Number(document.getElementById('sgaRate').value) / 100 || 0;
+        
+        const advance = Number(document.getElementById('advance').value) || 0;
+        const deposit = Number(document.getElementById('deposit').value) || 0;
+        const residual = Number(document.getElementById('residual').value) || 0;
+        const buyout = Number(document.getElementById('buyout').value) || 0;
+
+        let monthlyFee = Number(document.getElementById('monthlyFee').value) || 0;
+        let targetIrr = Number(document.getElementById('targetIrr').value) || 0;
+
+        let totalCost = cost * qty;
+        let totalMonthlyFee = monthlyFee * qty;
+        
+        // 월 판관비 산출 및 UI 반영 (수익률/렌탈료 역산 시 바로 활용)
+        let monthlySga = totalCost * sgaRate;
+        document.getElementById('monthlySga').value = Math.round(monthlySga);
+
+        document.getElementById('totalMonthlyFee').value = totalMonthlyFee;
+
+        // 1. 역산 로직 (목표 수익률 -> 렌탈료)
+        if (mode === 'fee' && targetIrr >= 0) {
+            const r = targetIrr / 100 / 12;
+            let pvInterestAndSga = 0;
+            let pvAnnuityFactor = 0;
+
+            for (let t = 1; t <= term; t++) {
+                let discount = (r === 0) ? 1 : Math.pow(1 + r, t);
+                pvAnnuityFactor += 1 / discount;
+
+                let principalRemain = totalCost - (totalCost / term) * (t - 1);
+                let interestT = (irrType === 'levered') ? (principalRemain * bRateMonthly) : 0;
+                
+                let extraM1 = (t === 1 && timingMode === 'm1') ? (advance + deposit) : 0;
+                // 월별 판관비 차감
+                pvInterestAndSga += (interestT + monthlySga - extraM1) / discount;
+            }
+
+            let cf0_local = (timingMode === 'm0') ? (advance + deposit - totalCost) : (-totalCost);
+            let pvEnd = (r === 0) ? (residual + buyout - deposit) : ((residual / Math.pow(1 + r, term)) + ((buyout - deposit) / Math.pow(1 + r, term + 1)));
+
+            let pvKnown = cf0_local + pvEnd - pvInterestAndSga;
+            totalMonthlyFee = (r === 0) ? (-pvKnown / term) : (-pvKnown / pvAnnuityFactor);
+            monthlyFee = totalMonthlyFee / qty;
+            
+            document.getElementById('monthlyFee').value = Math.round(monthlyFee);
+            document.getElementById('totalMonthlyFee').value = Math.round(totalMonthlyFee);
+        }
+        
+        // 2. 역산 로직 (목표 수익률 -> 취득원가)
+        else if (mode === 'cost' && targetIrr >= 0) {
+            const r = targetIrr / 100 / 12;
+            let pvPmt = 0;
+            let sumFactor = 0;
+            
+            for (let t = 1; t <= term; t++) {
+                let interestFactor = (irrType === 'levered') ? ((1 - (t - 1) / term) * bRateMonthly) : 0;
+                
+                // 총취득가(C)를 구하는 대수학 방정식: 판관비율도 C에 비례하므로 할인계수(sumFactor) 쪽에 합산하여 이관
+                let deductionFactor = interestFactor + sgaRate; 
+                let discount = (r === 0) ? 1 : Math.pow(1 + r, t);
+
+                sumFactor += deductionFactor / discount;
+                
+                let extraM1 = (t === 1 && timingMode === 'm1') ? (advance + deposit) : 0;
+                pvPmt += (totalMonthlyFee + extraM1) / discount;
+            }
+            
+            let m0_cash = (timingMode === 'm0') ? (advance + deposit) : 0;
+            let pvEnd = (r === 0) ? (residual + buyout - deposit) : ((residual / Math.pow(1 + r, term)) + ((buyout - deposit) / Math.pow(1 + r, term + 1)));
+            
+            totalCost = (m0_cash + pvPmt + pvEnd) / (1 + sumFactor);
+            cost = totalCost / qty;
+            document.getElementById('cost').value = Math.round(cost);
+            
+            // 역산된 총취득가를 바탕으로 월 판관비 재산출
+            monthlySga = totalCost * sgaRate;
+            document.getElementById('monthlySga').value = Math.round(monthlySga);
+        }
+
+        // 3. 정산 로직 (렌탈료 & 취득원가 -> IRR 계산)
+        let calculatedIrr = targetIrr; 
+        if (mode === 'irr' || mode === 'fee' || mode === 'cost') {
+            const endCf = buyout - deposit; 
+            
+            let r = 0.1 / 12; 
+            for (let i = 0; i < 100; i++) {
+                let npv = -totalCost;
+                if (timingMode === 'm0') {
+                    npv += advance + deposit;
+                }
+                let dnpv = 0;
+                
+                for (let t = 1; t <= term; t++) {
+                    let principalRemain = totalCost - (totalCost / term) * (t - 1);
+                    let interestT = (irrType === 'levered') ? (principalRemain * bRateMonthly) : 0;
+                    
+                    // 총취득가와 연동된 판관비(monthlySga)를 비용으로 차감
+                    let netPmt = totalMonthlyFee - interestT - monthlySga;
+
+                    if (t === 1 && timingMode === 'm1') {
+                        netPmt += advance + deposit;
+                    }
+
+                    npv += netPmt / Math.pow(1 + r, t);
+                    dnpv -= (t * netPmt) / Math.pow(1 + r, t + 1);
+                }
+                
+                npv += residual / Math.pow(1 + r, term);
+                dnpv -= (term * residual) / Math.pow(1 + r, term + 1);
+                
+                npv += endCf / Math.pow(1 + r, term + 1);
+                dnpv -= ((term + 1) * endCf) / Math.pow(1 + r, term + 2);
+                
+                if (Math.abs(dnpv) < 1e-10) break;
+
+                let new_r = r - npv / dnpv;
+                if (Math.abs(new_r - r) < 1e-7) {
+                    calculatedIrr = new_r * 12 * 100;
+                    break;
+                }
+                r = new_r;
+            }
+            
+            if (mode === 'irr') {
+                document.getElementById('targetIrr').value = isNaN(calculatedIrr) ? 0 : calculatedIrr.toFixed(2);
+            }
+        }
+
+        document.getElementById('irrResult').innerText = isNaN(calculatedIrr) || calculatedIrr < -100 ? "N/A " : calculatedIrr.toFixed(2);
+
+        // 견적서 미리보기 업데이트
+        const isVatInclude = document.querySelector('input[name="vat"]:checked').value === 'include';
+        const vatMultiplier = isVatInclude ? 1.1 : 1;
+
+        document.getElementById('qProduct').innerText = getProductDisplayName();
+        document.getElementById('qQty').innerText = qty + " 대";
+        document.getElementById('qManager').innerText = document.getElementById('managerInfo').value || "(공란)";
+        document.getElementById('qTerm').innerText = term + " 개월";
+        
+        document.getElementById('qTimingText').innerText = (timingMode === 'm0') ? "계약 시 납부" : "1회차 렌탈료 청구 시 납부";
+        document.getElementById('qAdvance').innerText = formatNumber(advance * vatMultiplier) + " 원";
+        document.getElementById('qDeposit').innerText = formatNumber(deposit * vatMultiplier) + " 원";
+        document.getElementById('qMonthlyFee').innerText = formatNumber(totalMonthlyFee * vatMultiplier) + " 원";
+        document.getElementById('qResidual').innerText = formatNumber(residual * vatMultiplier) + " 원";
+        document.getElementById('qBuyout').innerText = formatNumber(buyout * vatMultiplier) + " 원";
+        document.getElementById('qVatText').innerText = isVatInclude ? "부가세 포함" : "부가세 별도";
+
+        let options = [];
+        if(document.getElementById('optAS').checked) options.push("A/S 지원");
+        if(document.getElementById('optInstall').checked) options.push("설치비 무료");
+        document.getElementById('qOptions').innerText = options.length > 0 ? options.join(" / ") : "추가 옵션 없음";
+    }
+
+    function downloadExcel() {
+        const wb = XLSX.utils.table_to_book(document.getElementById('excelTable'), {sheet:"견적서"});
+        XLSX.writeFile(wb, 'SmartQuote_견적서.xlsx');
+    }
+
+    function downloadPDF() {
+        const element = document.getElementById('quoteDoc');
+        const opt = {
+            margin:       10,
+            filename:     'SmartQuote_견적서.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2 },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(element).save();
+    }
+
+
+    const EXCEL_TEMPLATE_B64 = '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';
+
+    async function downloadFilledExcel() {
+        const btn = document.querySelector('button[onclick="downloadFilledExcel()"]');
+        const origText = btn.innerText;
+        btn.innerText = '⏳ 생성 중...';
+        btn.disabled = true;
+
+        const lines = getDownloadLines();
+        if (!lines) {
+            alert('상품을 선택하고 조건을 입력해주세요.\n또는 시나리오를 목록에 추가해주세요.');
+            btn.innerText = origText;
+            btn.disabled = false;
+            return;
+        }
+
+        const payload = {
+            lines: lines,
+            ...collectGlobals(),
+        };
+
+        try {
+            const res = await fetch('http://localhost:5000/fill-excel-bundle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                alert('오류: ' + (err.error || res.statusText));
+                return;
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+            a.href = url;
+            a.download = `수익률분석_협의_${lines.length}건_${date}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch(e) {
+            alert('서버 연결 실패\nserver.py를 먼저 실행해주세요.\n(python server.py)');
+        } finally {
+            btn.innerText = origText;
+            btn.disabled = false;
+        }
+    }
+
+    window.onload = function() {
+        toggleCustomProduct();
+        updateMode();
+        renderScenarioList();
+    };
+</script>
+
+</body>
+</html>
