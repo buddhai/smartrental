@@ -6,12 +6,19 @@ import math
 _MONTHLY_RATE_MIN = -0.5
 _MONTHLY_RATE_MAX = 2.0
 FEE_ROUND_UNIT = 1000  # 월렌탈료 역산 시 천원 단위 올림
+COST_ROUND_UNIT = 10000  # 취득원가 역산 시 만원 단위 내림
 
 
 def _ceil_to_unit(value: float, unit: int = FEE_ROUND_UNIT) -> float:
     if value <= 0:
         return 0.0
     return math.ceil(value / unit) * unit
+
+
+def _floor_to_unit(value: float, unit: int = COST_ROUND_UNIT) -> float:
+    if value <= 0:
+        return 0.0
+    return math.floor(value / unit) * unit
 
 
 def _disc_pow(rate: float, n: int) -> float:
@@ -212,6 +219,9 @@ def compute_rental(
 
         total_cost = (m0_cash + pv_pmt + pv_end) / (1 + sum_factor)
         cost = total_cost / qty
+        # 목표 IRR은 하한 — 취득원가를 만원 단위로 내림해 실제 IRR을 목표 이상으로
+        cost = _floor_to_unit(cost)
+        total_cost = cost * qty
         monthly_sga = total_cost * sga_rate
         total_monthly_fee = monthly_fee * qty
 

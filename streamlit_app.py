@@ -40,7 +40,7 @@ TIMING_LABELS = {'m1': '1회차 청구', 'm0': '계약 시점'}
 MODE_HINTS = {
     'irr': '취득원가 · 월렌탈료 입력 → <strong>수익률</strong> 산출',
     'fee': '취득원가 · 목표 IRR(하한) 입력 → <strong>월렌탈료</strong> 산출 (천원 올림)',
-    'cost': '월렌탈료 · 목표 IRR 입력 → <strong>취득원가</strong> 산출',
+    'cost': '월렌탈료 · 목표 IRR(하한) 입력 → <strong>취득원가</strong> 산출 (만원 내림)',
 }
 SOLVED_TAGS = {'irr': '수익률 산출', 'fee': '월렌탈료 산출', 'cost': '취득원가 산출'}
 IRR_HELP = {
@@ -381,10 +381,11 @@ def _render_hero(calc_mode: str, result: dict, target_irr: float) -> tuple[str, 
             f'목표 IRR {target_irr:.0f}% 이상 · 실제 {irr_actual} · 총 {result["total_monthly_fee"]:,}원',
         )
     if calc_mode == 'cost':
+        irr_actual = _format_irr(result['irr'])
         return (
             '취득원가 / 대',
             f'{result["cost"]:,}원',
-            f'목표 IRR {target_irr:.2f}% · 월렌탈 {result["monthly_fee"]:,}원/대',
+            f'목표 IRR {target_irr:.0f}% 이상 · 실제 {irr_actual} · 월렌탈 {result["monthly_fee"]:,}원/대',
         )
     irr_text = _format_irr(result['irr'])
     return (
@@ -436,12 +437,26 @@ def _render_scenario_values(calc_mode: str) -> tuple[float, float, float]:
             key='in_fee', label_visibility='collapsed',
         )
     with c2:
-        _field_label('목표 IRR (%)', required=True)
+        _field_label('목표 IRR (%) · 하한', required=True)
         target_irr = st.number_input(
             '목표 IRR (%)', min_value=0.0, value=15.0, step=0.01, format='%.2f',
-            key='in_target_irr', label_visibility='collapsed',
+            key='in_target_irr_cost', label_visibility='collapsed',
         )
     return 0.0, monthly_fee, target_irr
+
+
+def _validate_excel_line(line: dict) -> str | None:
+    """엑셀용 시나리오 검증. 오류 메시지 또는 None."""
+    if not (line.get('productName') or '').strip():
+        return '상품을 선택해 주세요.'
+    term = int(line.get('term') or 0)
+    if term not in SUPPORTED_TERMS:
+        return f'렌탈 기간은 {", ".join(str(t) for t in sorted(SUPPORTED_TERMS))}개월만 지원합니다.'
+    if float(line.get('cost') or 0) <= 0:
+        return '취득원가가 비어 있습니다. 입력 후 다시 시도해 주세요.'
+    if float(line.get('totalMonthlyFee') or 0) <= 0:
+        return '월렌탈료가 비어 있습니다. 월렌탈료 모드로 역산하거나 값을 입력해 주세요.'
+    return None
 
 
 def _normalize_segmented(val, options: list, labels: dict, default: str) -> str:
@@ -737,27 +752,36 @@ def main():
     if not lines:
         st.warning('상품을 선택하거나 시나리오를 추가해 주세요.')
     else:
-        try:
-            excel_globals = {
-                'borrowRate': globals_['borrow_rate'],
-                'sgaRate': globals_['sga_rate_pct'],
-                'irrType': globals_['irr_type'],
-                'residual': globals_['residual'],
-            }
-            wb = build_bundle_workbook(lines, excel_globals, load_workbook_for_term)
-            buf = io.BytesIO()
-            wb.save(buf)
-            fname = f"수익률분석_협의_{len(lines)}건_{datetime.now().strftime('%Y%m%d')}.xlsx"
-            st.download_button(
-                label=f'수익률분석표 다운로드 · {len(lines)}건',
-                data=buf.getvalue(),
-                file_name=fname,
-                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                type='primary',
-                use_container_width=True,
-            )
-        except Exception as e:
-            st.error(f'엑셀 생성 오류: {e}')
+        validation_err = None
+        for i, line in enumerate(lines, 1):
+            validation_err = _validate_excel_line(line)
+            if validation_err:
+                validation_err = f'{i}번 시나리오: {validation_err}'
+                break
+        if validation_err:
+            st.warning(validation_err)
+        else:
+            try:
+                excel_globals = {
+                    'borrowRate': globals_['borrow_rate'],
+                    'sgaRate': globals_['sga_rate_pct'],
+                    'irrType': globals_['irr_type'],
+                    'residual': globals_['residual'],
+                }
+                wb = build_bundle_workbook(lines, excel_globals, load_workbook_for_term)
+                buf = io.BytesIO()
+                wb.save(buf)
+                fname = f"수익률분석_협의_{len(lines)}건_{datetime.now().strftime('%Y%m%d')}.xlsx"
+                st.download_button(
+                    label=f'수익률분석표 다운로드 · {len(lines)}건',
+                    data=buf.getvalue(),
+                    file_name=fname,
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    type='primary',
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.error(f'엑셀 생성 오류: {e}')
 
 
 if __name__ == '__main__':

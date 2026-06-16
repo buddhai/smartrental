@@ -221,7 +221,7 @@ def fill_input_cells(ws, data: dict):
     ws['F6'] = qty
     ws['H6'] = term
     ws['K6'] = total_fee
-    ws['K14'] = advance if advance else None
+    ws['K14'] = advance
     ws['N6'] = 0 if irr_type == 'unlevered' else borrow_rate
     ws['O6'] = residual
     set_sga_rate(ws, term, sga_rate)
