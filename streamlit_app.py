@@ -2,7 +2,6 @@
 """
 SmartQuote Streamlit MVP
 실행: streamlit run streamlit_app.py
-(기존 HTML/Flask와 별도 — 롤백 시 이 파일만 삭제하면 됨)
 """
 from __future__ import annotations
 
@@ -19,6 +18,7 @@ st.set_page_config(
     page_title='렌탈 수익률 분석',
     page_icon='📊',
     layout='wide',
+    initial_sidebar_state='collapsed',
 )
 
 PRODUCT_OPTIONS = [
@@ -33,6 +33,198 @@ PRODUCT_LABELS = {
     '__custom__': '직접입력',
 }
 SUPPORTED_TERMS_LIST = sorted(SUPPORTED_TERMS)
+
+CALC_LABELS = {'irr': '수익률', 'fee': '월렌탈료', 'cost': '취득원가'}
+IRR_LABELS = {'unlevered': '순수수익률', 'levered': '자기자본'}
+TIMING_LABELS = {'m1': '1회차 청구', 'm0': '계약 시점'}
+
+
+def _inject_styles():
+    st.markdown(
+        """
+        <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        :root {
+            --bg: #F2F4F6;
+            --surface: #FFFFFF;
+            --text: #191F28;
+            --text-sub: #6B7684;
+            --border: #E5E8EB;
+            --accent: #3182F6;
+            --accent-soft: #E8F3FF;
+            --radius: 14px;
+        }
+
+        .stApp {
+            background: var(--bg);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .block-container {
+            max-width: 980px;
+            padding-top: 1.25rem;
+            padding-bottom: 2.5rem;
+        }
+
+        header[data-testid="stHeader"] { background: transparent; }
+
+        h1 {
+            font-size: 1.55rem !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.03em;
+            color: var(--text) !important;
+            margin-bottom: 0.15rem !important;
+        }
+
+        h2, h3 {
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            color: var(--text) !important;
+            letter-spacing: -0.02em;
+        }
+
+        p, label, .stCaption, [data-testid="stMarkdownContainer"] p {
+            color: var(--text-sub);
+            font-size: 0.82rem;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: var(--surface);
+            border: 1px solid var(--border) !important;
+            border-radius: var(--radius);
+            padding: 1rem 1.1rem 0.6rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+
+        div[data-testid="stMetric"] {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 0.65rem 0.75rem;
+        }
+
+        div[data-testid="stMetricLabel"] {
+            font-size: 0.72rem !important;
+            color: var(--text-sub) !important;
+        }
+
+        div[data-testid="stMetricValue"] {
+            font-size: 1.15rem !important;
+            font-weight: 700 !important;
+            color: var(--text) !important;
+            letter-spacing: -0.02em;
+        }
+
+        div[data-testid="stNumberInput"] button,
+        div[data-testid="stNumberInput"] [data-testid="stNumberInputStepDown"],
+        div[data-testid="stNumberInput"] [data-testid="stNumberInputStepUp"] {
+            display: none !important;
+        }
+
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stSelectbox"] > div > div {
+            border-radius: 10px !important;
+            border-color: var(--border) !important;
+            font-size: 0.88rem !important;
+            min-height: 2.35rem;
+        }
+
+        div[data-testid="stNumberInput"] > div {
+            border-radius: 10px !important;
+        }
+
+        .stTextInput label, .stNumberInput label, .stSelectbox label {
+            font-size: 0.78rem !important;
+            font-weight: 500 !important;
+            color: var(--text-sub) !important;
+        }
+
+        div[data-testid="stSegmentedControl"] {
+            background: var(--bg);
+            border-radius: 10px;
+            padding: 3px;
+        }
+
+        div[data-testid="stSegmentedControl"] button {
+            font-size: 0.78rem !important;
+            font-weight: 500 !important;
+            border-radius: 8px !important;
+        }
+
+        div[data-testid="stExpander"] {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .stButton > button {
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            font-size: 0.88rem !important;
+            border: none !important;
+            padding: 0.55rem 1rem !important;
+            transition: opacity 0.15s;
+        }
+
+        .stButton > button[kind="primary"] {
+            background: var(--accent) !important;
+            color: white !important;
+        }
+
+        .stButton > button[kind="secondary"] {
+            background: var(--surface) !important;
+            color: var(--text) !important;
+            border: 1px solid var(--border) !important;
+        }
+
+        .stDownloadButton > button {
+            border-radius: 12px !important;
+            background: var(--accent) !important;
+            color: white !important;
+            font-weight: 600 !important;
+            padding: 0.7rem 1rem !important;
+        }
+
+        div[data-testid="stDataFrame"] {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .hero-irr {
+            background: linear-gradient(135deg, #3182F6 0%, #1B64DA 100%);
+            border-radius: 16px;
+            padding: 1.25rem 1.4rem;
+            color: white;
+            margin-bottom: 0.75rem;
+        }
+        .hero-irr .label { font-size: 0.75rem; opacity: 0.85; margin-bottom: 0.2rem; }
+        .hero-irr .value { font-size: 2rem; font-weight: 700; letter-spacing: -0.04em; line-height: 1.1; }
+        .hero-irr .sub { font-size: 0.78rem; opacity: 0.8; margin-top: 0.35rem; }
+
+        .login-wrap {
+            max-width: 360px;
+            margin: 4rem auto 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2rem 1.75rem 1.5rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .login-wrap h1 { font-size: 1.35rem !important; margin-bottom: 0.5rem !important; }
+
+        section[data-testid="stSidebar"] {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+        }
+
+        #MainMenu, footer { visibility: hidden; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _init_state():
@@ -86,22 +278,46 @@ def _get_app_password() -> str:
         return ''
 
 
+def _format_irr(irr_display: float) -> str:
+    if irr_display < -100 or irr_display != irr_display:
+        return 'N/A'
+    return f'{irr_display:.2f}%'
+
+
+def _segmented(label: str, options: list, labels: dict, key: str) -> str:
+    try:
+        return st.segmented_control(
+            label,
+            options=options,
+            format_func=lambda x: labels[x],
+            key=key,
+            label_visibility='collapsed',
+        )
+    except Exception:
+        return st.radio(label, options, format_func=lambda x: labels[x], key=key, horizontal=True)
+
+
 def _render_login() -> bool:
-    """공통 비밀번호 인증. 성공 시 True."""
     if st.session_state.get('authenticated'):
         return True
 
-    st.title('렌탈 수익률 분석')
-    st.caption('담당자 전용 · 비밀번호를 입력하세요.')
+    st.markdown(
+        '<div class="login-wrap">'
+        '<h1>렌탈 수익률 분석</h1>'
+        '<p style="margin:0 0 1.5rem;color:#6B7684;font-size:0.85rem;">담당자 전용</p></div>',
+        unsafe_allow_html=True,
+    )
 
-    with st.form('login_form'):
-        password = st.text_input('접속 비밀번호', type='password')
-        submitted = st.form_submit_button('로그인', type='primary', use_container_width=True)
+    _, center, _ = st.columns([1, 1.2, 1])
+    with center:
+        with st.form('login_form'):
+            password = st.text_input('비밀번호', type='password', placeholder='비밀번호 입력')
+            submitted = st.form_submit_button('로그인', type='primary', use_container_width=True)
 
     if submitted:
         expected = _get_app_password()
         if not expected:
-            st.error('서버에 APP_PASSWORD가 설정되지 않았습니다. (Cloud → Settings → Secrets)')
+            st.error('APP_PASSWORD가 설정되지 않았습니다.')
         elif password == expected:
             st.session_state.authenticated = True
             st.rerun()
@@ -111,40 +327,31 @@ def _render_login() -> bool:
     return False
 
 
-def _render_sidebar() -> dict:
-    st.sidebar.header('공통 설정')
-    irr_type = st.sidebar.radio(
-        '수익률 산출',
-        options=['unlevered', 'levered'],
-        format_func=lambda x: '순수 수익률 (엑셀 동일)' if x == 'unlevered' else '자기자본 수익률',
-    )
-    timing_mode = st.sidebar.radio(
-        '초기대금 시점',
-        options=['m1', 'm0'],
-        format_func=lambda x: '1회차 청구 시' if x == 'm1' else '계약 시점',
-    )
-    calc_mode = st.sidebar.radio(
-        '목표 계산',
-        options=['irr', 'fee', 'cost'],
-        format_func=lambda x: {'irr': '수익률(IRR)', 'fee': '월 렌탈료', 'cost': '취득원가'}[x],
-    )
-    borrow_rate = st.sidebar.number_input('조달 금리 (연 %)', value=6.0, step=0.1)
-    sga_rate_pct = st.sidebar.number_input(
-        '월별 판관비율 (%)',
-        value=0.105555555555,
-        step=0.0001,
-        format='%.10f',
-    )
-    residual = st.sidebar.number_input('잔존가치 (원, 공통)', value=0, step=10000)
-    manager = st.sidebar.text_input('담당자 (메모)', value='')
+def _render_settings_bar() -> dict:
+    st.markdown('##### 계산 설정')
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        calc_mode = _segmented('목표', ['irr', 'fee', 'cost'], CALC_LABELS, 'calc_mode')
+    with c2:
+        irr_type = _segmented('수익률', ['unlevered', 'levered'], IRR_LABELS, 'irr_type')
+    with c3:
+        timing_mode = _segmented('시점', ['m1', 'm0'], TIMING_LABELS, 'timing_mode')
 
-    st.sidebar.divider()
-    if st.sidebar.button('로그아웃'):
-        st.session_state.authenticated = False
-        st.session_state.scenarios = []
-        st.rerun()
-
-    st.sidebar.caption('기존 HTML 버전: `python server.py` → localhost:5000')
+    with st.expander('금리 · 판관비 · 잔존가치', expanded=False):
+        g1, g2, g3, g4 = st.columns(4)
+        with g1:
+            borrow_rate = st.number_input('조달금리 (연%)', value=6.0, step=0.1, format='%.1f')
+        with g2:
+            sga_rate_pct = st.number_input(
+                '판관비율 (월%)',
+                value=0.105555555555,
+                step=0.0001,
+                format='%.6f',
+            )
+        with g3:
+            residual = st.number_input('잔존가치 (원)', value=0, step=10000, format='%d')
+        with g4:
+            manager = st.text_input('담당자', value='', placeholder='메모')
 
     return {
         'irr_type': irr_type,
@@ -158,45 +365,67 @@ def _render_sidebar() -> dict:
 
 
 def main():
+    _inject_styles()
+
     if not _render_login():
         return
 
     _init_state()
-    globals_ = _render_sidebar()
 
-    st.title('렌탈 수익률 분석')
-    st.caption('공급사 협의용 · 시나리오별 수익률분석표 엑셀 묶음 다운로드')
+    top_l, top_r = st.columns([5, 1])
+    with top_l:
+        st.title('렌탈 수익률 분석')
+        st.caption('시나리오별 수익률분석표 엑셀 묶음')
+    with top_r:
+        if st.button('로그아웃', use_container_width=True):
+            st.session_state.authenticated = False
+            st.session_state.scenarios = []
+            st.rerun()
 
-    col_l, col_r = st.columns([1, 1])
+    globals_ = _render_settings_bar()
+    st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
+
+    col_l, col_r = st.columns(2, gap='medium')
 
     with col_l:
-        st.subheader('시나리오 입력')
-        product_key = st.selectbox(
-            '상품',
-            PRODUCT_OPTIONS,
-            format_func=lambda x: PRODUCT_LABELS.get(x, x),
-        )
-        custom_name = ''
-        if product_key == '__custom__':
-            custom_name = st.text_input('상품명 직접 입력')
+        with st.container(border=True):
+            st.markdown('##### 시나리오')
+            product_key = st.selectbox(
+                '상품',
+                PRODUCT_OPTIONS,
+                format_func=lambda x: PRODUCT_LABELS.get(x, x),
+                label_visibility='collapsed',
+            )
+            custom_name = ''
+            if product_key == '__custom__':
+                custom_name = st.text_input('상품명', placeholder='직접 입력')
 
-        c1, c2 = st.columns(2)
-        with c1:
-            qty = st.number_input('수량 (대)', min_value=1, value=1, step=1)
-        with c2:
-            term = st.selectbox('렌탈 기간 (개월)', SUPPORTED_TERMS_LIST, index=SUPPORTED_TERMS_LIST.index(36))
+            r1, r2 = st.columns(2)
+            with r1:
+                qty = st.number_input('수량 (대)', min_value=1, value=1, step=1)
+            with r2:
+                term = st.selectbox(
+                    '기간 (개월)',
+                    SUPPORTED_TERMS_LIST,
+                    index=SUPPORTED_TERMS_LIST.index(36),
+                )
 
-        cost = st.number_input('대당 취득원가 (원)', min_value=0, value=0, step=10000)
-        monthly_fee = st.number_input('대당 월 렌탈료 (원)', min_value=0, value=0, step=1000)
-        target_irr = st.number_input('목표 수익률 (%)', min_value=0.0, value=0.0, step=0.01)
+            r3, r4, r5 = st.columns(3)
+            with r3:
+                cost = st.number_input('취득원가/대', min_value=0, value=0, step=10000, format='%d')
+            with r4:
+                monthly_fee = st.number_input('월렌탈료/대', min_value=0, value=0, step=1000, format='%d')
+            with r5:
+                target_irr = st.number_input('목표 IRR (%)', min_value=0.0, value=0.0, step=0.01, format='%.2f')
 
-        st.markdown('**초기/만기 현금흐름**')
-        c3, c4 = st.columns(2)
-        with c3:
-            advance = st.number_input('선수금 (원)', min_value=0, value=0, step=10000)
-            deposit = st.number_input('보증금 (원)', min_value=0, value=0, step=10000)
-        with c4:
-            buyout = st.number_input('인수금 (원)', min_value=0, value=0, step=10000)
+            with st.expander('선수금 · 보증금 · 인수금', expanded=False):
+                f1, f2, f3 = st.columns(3)
+                with f1:
+                    advance = st.number_input('선수금', min_value=0, value=0, step=10000, format='%d')
+                with f2:
+                    deposit = st.number_input('보증금', min_value=0, value=0, step=10000, format='%d')
+                with f3:
+                    buyout = st.number_input('인수금', min_value=0, value=0, step=10000, format='%d')
 
     product_name = _resolve_product(product_key, custom_name)
     scenario_inputs = {
@@ -224,61 +453,72 @@ def main():
         target_irr=target_irr,
     )
 
+    irr_text = _format_irr(result['irr'])
+
     with col_r:
-        st.subheader('계산 결과')
-        m1, m2, m3 = st.columns(3)
-        irr_display = result['irr']
-        irr_text = 'N/A' if irr_display < -100 or irr_display != irr_display else f'{irr_display:.2f}%'
-        m1.metric('IRR (연)', irr_text)
-        m2.metric('총 월 렌탈료', f"{result['total_monthly_fee']:,}원")
-        m3.metric('월 판관비', f"{result['monthly_sga']:,}원")
+        with st.container(border=True):
+            st.markdown('##### 결과')
 
-        if globals_['calc_mode'] == 'fee':
-            st.info(f"역산 대당 월렌탈료: **{result['monthly_fee']:,}** 원")
-        elif globals_['calc_mode'] == 'cost':
-            st.info(f"역산 대당 취득원가: **{result['cost']:,}** 원")
-        elif globals_['calc_mode'] == 'irr':
-            st.info(f"산출 IRR: **{irr_text}**")
+            sub_line = ''
+            if globals_['calc_mode'] == 'fee':
+                sub_line = f'역산 월렌탈료 {result["monthly_fee"]:,}원/대'
+            elif globals_['calc_mode'] == 'cost':
+                sub_line = f'역산 취득원가 {result["cost"]:,}원/대'
+            else:
+                sub_line = f'총 월렌탈료 {result["total_monthly_fee"]:,}원'
 
-        st.divider()
-        add_disabled = product_name is None
-        if st.button('＋ 시나리오 목록에 추가', type='primary', disabled=add_disabled, use_container_width=True):
-            row = _build_current_inputs(product_name, globals_, scenario_inputs, result)
-            st.session_state.scenarios.append(row)
-            st.rerun()
+            st.markdown(
+                f'<div class="hero-irr">'
+                f'<div class="label">연 IRR</div>'
+                f'<div class="value">{irr_text}</div>'
+                f'<div class="sub">{sub_line}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-        if add_disabled:
-            st.caption('상품을 선택하면 목록에 추가할 수 있습니다.')
+            m1, m2 = st.columns(2)
+            m1.metric('총 월렌탈료', f'{result["total_monthly_fee"]:,}원')
+            m2.metric('월 판관비', f'{result["monthly_sga"]:,}원')
 
-    st.divider()
-    st.subheader(f"시나리오 목록 ({len(st.session_state.scenarios)}건)")
-
-    if st.session_state.scenarios:
-        display_rows = []
-        for i, s in enumerate(st.session_state.scenarios):
-            irr_val = s.get('irr', 0)
-            irr_s = 'N/A' if irr_val < -100 else f"{irr_val:.2f}"
-            display_rows.append({
-                '#': i + 1,
-                '상품': s['productName'],
-                '기간': f"{s['term']}개월",
-                '수량': s['qty'],
-                '월렌탈료': s['totalMonthlyFee'],
-                'IRR(%)': irr_s,
-            })
-        st.dataframe(display_rows, use_container_width=True, hide_index=True)
-
-        bc1, bc2, _ = st.columns([1, 1, 2])
-        with bc1:
-            if st.button('목록 전체 삭제', use_container_width=True):
-                st.session_state.scenarios = []
+            add_disabled = product_name is None
+            if st.button('시나리오 추가', type='primary', disabled=add_disabled, use_container_width=True):
+                row = _build_current_inputs(product_name, globals_, scenario_inputs, result)
+                st.session_state.scenarios.append(row)
                 st.rerun()
-        with bc2:
-            if st.button('마지막 항목 삭제', use_container_width=True):
-                st.session_state.scenarios.pop()
-                st.rerun()
-    else:
-        st.info('목록이 비어 있으면 **현재 조건 1건**만 엑셀에 담깁니다.')
+            if add_disabled:
+                st.caption('상품을 선택하면 추가할 수 있습니다.')
+
+    st.markdown('<div style="height:0.75rem"></div>', unsafe_allow_html=True)
+
+    n = len(st.session_state.scenarios)
+    with st.container(border=True):
+        st.markdown(f'##### 시나리오 목록 · {n}건')
+
+        if st.session_state.scenarios:
+            display_rows = []
+            for i, s in enumerate(st.session_state.scenarios):
+                irr_val = s.get('irr', 0)
+                irr_s = 'N/A' if irr_val < -100 else f'{irr_val:.2f}'
+                display_rows.append({
+                    '상품': s['productName'],
+                    '기간': f"{s['term']}개월",
+                    '수량': s['qty'],
+                    '월렌탈료': f"{s['totalMonthlyFee']:,}",
+                    'IRR': irr_s,
+                })
+            st.dataframe(display_rows, use_container_width=True, hide_index=True, height=min(44 + n * 35, 220))
+
+            b1, b2, _ = st.columns([1, 1, 2])
+            with b1:
+                if st.button('전체 삭제', use_container_width=True):
+                    st.session_state.scenarios = []
+                    st.rerun()
+            with b2:
+                if st.button('마지막 삭제', use_container_width=True):
+                    st.session_state.scenarios.pop()
+                    st.rerun()
+        else:
+            st.caption('비어 있으면 현재 조건 1건이 엑셀에 포함됩니다.')
 
     lines = [_scenario_to_excel_line(s) for s in st.session_state.scenarios]
     if not lines:
@@ -288,11 +528,10 @@ def main():
         else:
             lines = []
 
-    st.divider()
-    can_download = len(lines) > 0
+    st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
 
-    if not can_download:
-        st.warning('상품을 선택하거나 시나리오를 추가해주세요.')
+    if not lines:
+        st.warning('상품을 선택하거나 시나리오를 추가해 주세요.')
     else:
         try:
             excel_globals = {
@@ -306,7 +545,7 @@ def main():
             wb.save(buf)
             fname = f"수익률분석_협의_{len(lines)}건_{datetime.now().strftime('%Y%m%d')}.xlsx"
             st.download_button(
-                label=f'📊 수익률분석표 다운로드 ({len(lines)}건)',
+                label=f'수익률분석표 다운로드 · {len(lines)}건',
                 data=buf.getvalue(),
                 file_name=fname,
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
