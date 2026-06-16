@@ -443,17 +443,31 @@ def _render_scenario_values(calc_mode: str) -> tuple[float, float, float]:
     return 0.0, monthly_fee, target_irr
 
 
+def _normalize_segmented(val, options: list, labels: dict, default: str) -> str:
+    if val in options:
+        return val
+    if val is None:
+        return default
+    reverse = {labels[k]: k for k in options}
+    if val in reverse:
+        return reverse[val]
+    return default
+
+
 def _segmented(label: str, options: list, labels: dict, key: str) -> str:
+    default = options[0]
     try:
-        return st.segmented_control(
+        raw = st.segmented_control(
             label,
             options=options,
             format_func=lambda x: labels[x],
             key=key,
             label_visibility='collapsed',
         )
+        return _normalize_segmented(raw, options, labels, default)
     except Exception:
-        return st.radio(label, options, format_func=lambda x: labels[x], key=key, horizontal=True)
+        raw = st.radio(label, options, format_func=lambda x: labels[x], key=key, horizontal=True)
+        return _normalize_segmented(raw, options, labels, default)
 
 
 def _render_login() -> bool:
@@ -491,7 +505,7 @@ def _render_settings_bar() -> dict:
     st.markdown('<div class="setting-title">목표 계산</div>', unsafe_allow_html=True)
     calc_mode = _segmented('목표', ['irr', 'fee', 'cost'], CALC_LABELS, 'calc_mode')
     st.markdown(
-        f'<div class="mode-hint">{MODE_HINTS[calc_mode]}</div>',
+        f'<div class="mode-hint">{MODE_HINTS.get(calc_mode, MODE_HINTS["irr"])}</div>',
         unsafe_allow_html=True,
     )
 
@@ -499,11 +513,11 @@ def _render_settings_bar() -> dict:
     with c2:
         st.markdown('<div class="setting-title">수익률 산출 방식</div>', unsafe_allow_html=True)
         irr_type = _segmented('수익률', ['unlevered', 'levered'], IRR_LABELS, 'irr_type')
-        st.markdown(f'<div class="setting-help">{IRR_HELP[irr_type]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="setting-help">{IRR_HELP.get(irr_type, IRR_HELP["unlevered"])}</div>', unsafe_allow_html=True)
     with c3:
         st.markdown('<div class="setting-title">초기대금 수취 시점</div>', unsafe_allow_html=True)
         timing_mode = _segmented('시점', ['m1', 'm0'], TIMING_LABELS, 'timing_mode')
-        st.markdown(f'<div class="setting-help">{TIMING_HELP[timing_mode]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="setting-help">{TIMING_HELP.get(timing_mode, TIMING_HELP["m1"])}</div>', unsafe_allow_html=True)
 
     with st.expander('금리 · 판관비 · 잔존가치 (선택)', expanded=False):
         st.caption('기본값이 적용됩니다. 자기자본 수익률 선택 시 조달금리가 이자비용에 반영됩니다.')
@@ -597,7 +611,7 @@ def main():
 
             calc_mode = globals_['calc_mode']
             st.markdown(
-                f'<span class="solved-tag">{SOLVED_TAGS[calc_mode]}</span>',
+                f'<span class="solved-tag">{SOLVED_TAGS.get(calc_mode, SOLVED_TAGS["irr"])}</span>',
                 unsafe_allow_html=True,
             )
             cost, monthly_fee, target_irr = _render_scenario_values(calc_mode)
